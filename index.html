@@ -34,7 +34,9 @@
         .score-value { font-size: 16px; color: #fff; font-weight: bold; }
         .score-value.high { color: #ffd700; }
         
-        #tspin-msg { position: absolute; top: -30px; width: 100%; text-align: center; color: #ff00ff; font-weight: bold; font-size: 14px; opacity: 0; transition: opacity 0.3s; }
+        #tspin-msg, #pause-msg { position: absolute; top: -30px; width: 100%; text-align: center; font-weight: bold; font-size: 14px; opacity: 0; transition: opacity 0.3s; }
+        #tspin-msg { color: #ff00ff; }
+        #pause-msg { color: #ffffff; }
 
         .hold-container { margin-bottom: 20px; text-align: center; }
         .hold-label { font-size: 10px; color: #aaa; margin-bottom: 5px; letter-spacing: 1px; font-weight: bold; }
@@ -107,6 +109,7 @@
             
             <div class="score-container" style="position: relative;">
                 <div id="tspin-msg">T-SPIN!</div>
+                <div id="pause-msg">PAUSED</div>
                 <div class="score-box"><div class="score-label">SCORE</div><div class="score-value" id="uiScore">0</div></div>
                 <div class="score-box"><div class="score-label">BEST</div><div class="score-value high" id="uiHigh">0</div></div>
             </div>
@@ -122,7 +125,11 @@
             <div class="control-row">
                 <button id="toggleEnv" class="btn">Env: Dark Void</button>
             </div>
-            
+
+            <div class="control-row">
+                <button id="pauseBtn" class="btn">Pause</button>
+            </div>
+
             <div class="control-row">
                 <button id="recenter" class="btn">Recenter Board</button>
             </div>
@@ -544,18 +551,37 @@
         }
 
         const keys = { ArrowLeft: false, ArrowRight: false, ArrowDown: false };
-        let lastMove = 0, moveTimer = 0, isFirstMove = false, lastDrop = 0;
+        let lastMove = 0, moveTimer = 0, isFirstMove = false, lastDrop = 0, lastTime = 0;
         const DAS_DELAY = 130, ARR_RATE = 50;
+        let paused = false;
+
+        function togglePause() {
+            paused = !paused;
+            const btn = document.getElementById('pauseBtn');
+            const msg = document.getElementById('pause-msg');
+            if (paused) {
+                btn.innerText = "Resume";
+                msg.style.opacity = 1;
+                keys.ArrowLeft = keys.ArrowRight = keys.ArrowDown = false;
+            } else {
+                btn.innerText = "Pause";
+                msg.style.opacity = 0;
+                lastDrop = lastTime; // prevent an instant drop on resume
+            }
+        }
+        document.getElementById('pauseBtn').onclick = togglePause;
 
         window.onkeydown = (e) => {
-            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyR', 'ControlLeft', 'ControlRight'].includes(e.code)) {
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyR', 'KeyP', 'ControlLeft', 'ControlRight'].includes(e.code)) {
                 if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'BUTTON')) document.activeElement.blur();
             }
+            if (e.code === 'KeyP') { togglePause(); return; }
+            if (paused) return;
             if (e.code === 'ArrowUp') rotate();
             if (e.code === 'Space') { while(!collision(0, -1, currentPiece.shape)) { currentPiece.y--; lastMoveWasRotation = false; } updateActiveMesh(); addToStaticStack(); }
             if (e.code === 'KeyR') recenterGame();
             if (e.code === 'ControlLeft' || e.code === 'ControlRight') holdPiece();
-            
+
             if (['ArrowLeft', 'ArrowRight', 'ArrowDown'].includes(e.code)) {
                 if (!keys[e.code]) { keys[e.code] = true; isFirstMove = true; moveTimer = 0; handleMove(e.code); }
             }
@@ -571,6 +597,8 @@
         spawnPiece(); 
         
         renderer.setAnimationLoop((time) => {
+            lastTime = time;
+            if (paused) { renderer.render(scene, camera); return; }
             if (time - lastDrop > 1000) { if (!collision(0, -1, currentPiece.shape)) { currentPiece.y--; lastMoveWasRotation=false; updateActiveMesh(); } else addToStaticStack(); lastDrop = time; }
             
             const delta = time - lastMove; lastMove = time;
